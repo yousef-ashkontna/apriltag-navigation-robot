@@ -18,7 +18,7 @@ constexpr uint32_t VISION_TIMEOUT_MS = 1000;
 constexpr uint32_t ARM_DELAY_MS = 2000;
 constexpr uint32_t MAINTENANCE_SETTLE_MS = 500;
 
-// Wheel diameter comes from the chassis diagram. Check the track on the assembled robot.
+// Nominal wheel dimensions. Measure the tire spacing before the first floor run.
 constexpr float LEFT_WHEEL_DIAMETER_M = 0.065f;
 constexpr float RIGHT_WHEEL_DIAMETER_M = 0.065f;
 constexpr float WHEEL_TRACK_M = 0.158f;      // estimate; measure between the tire centers

@@ -73,7 +73,7 @@ class CalibrationTest(unittest.TestCase):
                 calibration.upload("http://camera", values)
 
     def test_printed_board_detects(self):
-        # Match the supplied SVG's 10 x 7 squares, with a white border.
+        # Match CALIBRATION_BOARD.svg: 10 x 7 squares with a white border.
         image = np.full((240, 320), 255, np.uint8)
         for row in range(7):
             for col in range(10):

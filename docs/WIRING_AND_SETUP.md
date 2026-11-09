@@ -8,7 +8,7 @@ The controllers use hardware UART at **115200 baud, 8N1**. The NodeMCU hosts the
 
 This avoids runtime contention with the NodeMCU CP2102 transmitter: the firmware calls `Serial.swap()` to move its UART away from its normal USB pins. The camera UART is shared with programming, so **disconnect the runtime UART wires before a wired upload to either board**.
 
-The code assumes an AI-Thinker ESP32-CAM with working PSRAM, OV2640, and an L298N. OV2640 identifies the camera sensor, not the carrier pinout; confirm the carrier layout if your board is a different model.
+This pinout is for the AI-Thinker ESP32-CAM with OV2640 and PSRAM, paired with an L298N motor driver. Check the pinout before using a different ESP32-CAM board; the OV2640 sensor name alone does not identify the board layout.
 
 ## 2. Complete NodeMCU table
 
@@ -61,7 +61,7 @@ Do not use a microSD card. Leave camera GPIO12 and GPIO2 unconnected, do not use
 - Both MCUs require **3.3 V GPIO levels**. IR and encoder outputs must not drive 5 V into them. Power sensor modules at 3.3 V if they support it, or use appropriate level shifting for 5 V modules. Check onboard pull-ups on open-collector outputs; a module pulling OUT up to 5 V is not made safe by adding another pull-up to 3.3 V.
 - Default front IR polarity is active LOW. With app controls disconnected, the app should show both clear; blocking one should show the corresponding side blocked. Adjust `IR_ACTIVE_LOW` if the real modules use the opposite polarity. Disconnected active-low outputs may appear clear because of pull-ups, so test each sensor physically.
 - Use regulated **5 V with at least 1 A capacity for the camera**, plus enough additional capacity for the NodeMCU and other logic. Power the NodeMCU through its supported regulated 5 V input/USB arrangement, never 5 V into a 3.3 V pin.
-- Power motors from a supply suited to their ratings and L298N voltage drop, not either MCU regulator. Battery/motor ratings were not provided, so motor supply voltage is not assumed.
+- Choose the motor supply voltage to suit the motors, allowing for the L298N voltage drop. Do not power the motors through either board's regulator.
 - Verify the L298N module's `5V-EN` regulator jumper arrangement. On common modules, remove it when feeding regulated external 5 V to the logic terminal. Never tie two regulator outputs together or rely on an unknown L298N regulator to supply the camera.
 - Join grounds for both boards, driver, sensors, encoders and supplies. Route motor-current returns separately from camera logic returns. Good motor suppression and local bulk capacitance can help prevent resets.
 - During flashing, disconnect motor power and avoid tying an external 5 V rail directly to USB 5 V. Use one source per rail and common ground.
@@ -131,26 +131,26 @@ Keep the page visible and phone awake. Closing/backgrounding the page, losing fo
 
 ## 7. Geometry and calibration
 
-| Setting | Current value | Basis |
+| Setting | Current value | Notes |
 | --- | --- | --- |
-| Left/right wheel diameter | 0.065 m | 65 mm wheel diameter in supplied chassis image |
-| Left/right encoder PPR | **20** | Confirmed by user; counts RISING edges only |
-| Wheel track | **0.158 m, provisional** | Diagram's 158 mm dimension; verify tire center-to-center distance |
-| Tag outer black edge | 0.100 m | Generated print size; measure after printing |
-| Camera fx/fy | 280 pixels, provisional | Requires calibration at 320x240 |
-| Camera cx/cy | 160/120 pixels, provisional | Requires calibration at the same resolution/orientation |
+| Left/right wheel diameter | 0.065 m | Nominal 65 mm wheels; check the fitted tires |
+| Left/right encoder PPR | **20** | Counts rising edges only: 20 counts per wheel revolution |
+| Wheel track | **0.158 m (estimate)** | Measure between the tire centers and update `WHEEL_TRACK_M` |
+| Tag outer black edge | 0.100 m | Measure after printing at actual size |
+| Camera fx/fy | 280 pixels (uncalibrated) | Calibrate at 320 × 240 |
+| Camera cx/cy | 160/120 pixels (uncalibrated) | Keep the same image size and orientation after calibration |
 
-The diagram also shows chassis length 200 mm and widths 150/100 mm. Those body dimensions do not determine differential-drive wheel track. Its 233.2 g figure is a kit figure and is not treated as assembled robot mass. At 65 mm and 20 PPR, one rising edge represents about **10.21 mm** of wheel travel before slip.
+Wheel track is the distance between the centers of the two tires, not the chassis width. With 65 mm wheels and 20 counts per revolution, each count represents about **10.21 mm** of travel before slip.
 
 With app controls disconnected, turn each wheel by hand and inspect `http://192.168.4.1/api/state`: `ticks` should increase on the correct side by 20 for one full wheel turn. Turning ten revolutions should give about 200 counts. Do not double PPR to 40: firmware counts one edge per pulse. Direction is inferred from commands because these are single-channel encoders.
 
-Follow the [camera calibration guide](CAMERA_CALIBRATION.md) to collect chessboard pictures and save the lens settings to ESP32-CAM flash. Saved values replace the provisional fx/fy/cx/cy above after a camera restart. The pose calculation corrects tag corners for radial and tangential distortion and rebuilds their homography. Verify the result at several measured lens-to-tag distances. `xMm` should be positive to the robot's right and negative to its left. Fix camera mounting/orientation if steering signs are wrong, then recalibrate.
+Follow the [camera calibration guide](CAMERA_CALIBRATION.md) to collect chessboard pictures and save the lens settings to ESP32-CAM flash. Saved values replace the default fx/fy/cx/cy above after a camera restart. The pose calculation corrects tag corners for radial and tangential distortion and rebuilds their homography. Check the reported distance against a ruler at several lens-to-tag distances. `xMm` should be positive to the robot's right and negative to its left. Fix camera mounting/orientation if steering signs are wrong, then recalibrate.
 
-The live API also exposes camera readiness, frame age, IR flags, encoder counts, PWM values and decision margin. Do not attach a text serial logger to the runtime UART. PWM/feedforward/PI values in `robot_config.h` remain starting estimates and need tuning on the actual motors, battery and floor.
+The live API also reports camera readiness, frame age, IR flags, encoder counts, PWM values and decision margin. Do not attach a text serial logger to the runtime UART. Tune the PWM, feedforward and PI settings in `robot_config.h` with the robot's motors and battery on the floor it will use.
 
 ## 8. First tests, wheels raised
 
-1. Verify power levels, common GND, motor EN jumpers removed and all three 10 kΩ pull-downs fitted. Motors must remain off during either board's reset.
+1. Check power levels and common GND. Remove the motor EN jumpers and fit the two 10 kΩ pull-downs on ENA and ENB. Motors must remain off during either board's reset.
 2. Confirm app Wired link is Connected, Connect controls and Stop change Drive controls between Enabled and Disabled, IR sides/polarity match the physical sensors, and both encoders count correctly.
 3. Present each printed tag separately with motor power disconnected. The matching app tile should show In view. Select each destination and verify its pose is used; other visible IDs should not become the target.
 4. Arm and choose Manual with wheels raised. Hold forward, verify both wheels move forward, then release. Correct a reversed motor by swapping its two output wires while powered down or changing its `*_MOTOR_INVERT` setting, not both.

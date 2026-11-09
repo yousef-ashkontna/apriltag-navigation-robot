@@ -41,7 +41,7 @@ static const char MOBILE_PAGE[] PROGMEM = R"MOBILE(<!doctype html>
 </section>
 <section class="card" aria-label="Robot status"><div class="eyebrow">Live status</div><h2 id="state">Waiting for robot</h2><p id="reason">Connect your phone to the AprilRobot Wi-Fi network.</p>
 <div class="metrics"><div class="metric"><small>Destination</small><b id="target">—</b></div><div class="metric"><small>Tag distance</small><b id="range">—</b></div><div class="metric"><small>Drive controls</small><b id="armed">—</b></div><div class="metric"><small>Wired link</small><b id="link">—</b></div></div>
-<div id="sensors" class="sensor">Front sensors · Waiting</div><p id="calibration" class="fine">65 mm wheels · 20 PPR · 158 mm provisional track</p>
+<div id="sensors" class="sensor">Front sensors · Waiting</div><p id="calibration" class="fine">65 mm wheels · 20 PPR · Estimated wheel spacing: 158 mm</p>
 <button id="maintenance" aria-pressed="false" disabled>Updates &amp; calibration</button>
 <p id="maintenanceStatus" class="fine">Stops the motors so you can upload firmware or calibrate the camera.</p>
 </section></div>

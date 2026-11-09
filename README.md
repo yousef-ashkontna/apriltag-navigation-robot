@@ -15,7 +15,7 @@ The ESP32-CAM joins the same network to send pictures to the phone. The app show
 - Two front IR sensors
 - A suitable power supply
 
-The wheel spacing is currently set to 158 mm based on the chassis drawing. This still needs to be checked between the tire centers on the assembled robot. The camera calibration and motor-control gains also need tuning.
+The wheel spacing is set to 158 mm as an estimate. Measure between the tire centers and update `WHEEL_TRACK_M` before testing. Calibrate the camera and tune the motor-control gains on the assembled robot.
 
 The connections and power details are in [the wiring guide](docs/WIRING_AND_SETUP.md). Follow that pin table: D7 and D8 carry the NodeMCU UART, while its TX header is used for a motor-direction signal. Remove the L298N ENA/ENB jumpers and fit the pull-down resistors shown in the guide.
 

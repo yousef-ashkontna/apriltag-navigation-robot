@@ -1,0 +1,8 @@
+.pio
+.vscode/
+.env
+.env.*
+!.env.example
+__pycache__/
+# Keep measured calibration backups local to this robot.
+/calibration/

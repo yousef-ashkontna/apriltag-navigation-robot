@@ -1,0 +1,10 @@
+{
+  "name": "AprilTagESP32",
+  "version": "3.4.0",
+  "description": "Vendored ESP32 AprilTag port, pinned upstream revision in UPSTREAM.md",
+  "frameworks": "arduino",
+  "platforms": "espressif32",
+  "build": {
+    "srcFilter": ["+<*.c>", "+<common/*.c>", "-<tag*.c>", "+<tag36h11.c>"]
+  }
+}

@@ -17,6 +17,9 @@ uint8_t* latestFrame = nullptr;
 SemaphoreHandle_t frameMutex = nullptr;
 uint32_t frameId = 0, session = 0;
 int64_t frameTime = 0;
+portMUX_TYPE captureStatusMux = portMUX_INITIALIZER_UNLOCKED;
+const char* captureStatus = "starting";
+int captureError = 0;
 
 void headers(httpd_req_t* request) {
     httpd_resp_set_hdr(request, "Access-Control-Allow-Origin", "http://192.168.4.1");
@@ -95,6 +98,21 @@ esp_err_t settings(httpd_req_t* request) {
     cJSON_AddBoolToObject(object, "restart_required", restartRequired);
     cJSON_AddBoolToObject(object, "maintenance", cameraRuntime::maintenanceReady());
     cJSON_AddBoolToObject(object, "busy", cameraRuntime::busy());
+    cJSON_AddNumberToObject(object, "wifiRssi", WiFi.RSSI());
+    cJSON_AddNumberToObject(object, "freeHeap", ESP.getFreeHeap());
+    cJSON_AddNumberToObject(object, "freePsram", ESP.getFreePsram());
+    portENTER_CRITICAL(&captureStatusMux);
+    const char* status = captureStatus;
+    const int errorCode = captureError;
+    portEXIT_CRITICAL(&captureStatusMux);
+    cJSON_AddStringToObject(object, "captureStatus", status);
+    cJSON_AddNumberToObject(object, "captureError", errorCode);
+    if (frameMutex && xSemaphoreTake(frameMutex, pdMS_TO_TICKS(20)) == pdTRUE) {
+        cJSON_AddNumberToObject(object, "frameId", frameId);
+        cJSON_AddNumberToObject(object, "frameAgeMs",
+                               frameTime ? (esp_timer_get_time() - frameTime) / 1000 : -1);
+        xSemaphoreGive(frameMutex);
+    }
     cJSON_AddItemToObject(object, "active", toJson(active));
     cJSON_AddItemToObject(object, "saved", hasSaved ? toJson(saved) : cJSON_CreateNull());
     char* json = cJSON_PrintUnformatted(object);
@@ -288,11 +306,21 @@ void begin() {
 }
 
 void publishFrame(const camera_fb_t* frame, uint32_t sequence, int64_t captureUs) {
+    if (!frame || frame->format != PIXFORMAT_GRAYSCALE || frame->width != cfg::IMAGE_WIDTH ||
+        frame->height != cfg::IMAGE_HEIGHT || frame->len < FRAME_BYTES)
+        return;
     if (!latestFrame || !frameMutex || xSemaphoreTake(frameMutex, 0) != pdTRUE)
         return;
     memcpy(latestFrame, frame->buf, FRAME_BYTES);
     frameId = sequence;
     frameTime = captureUs;
     xSemaphoreGive(frameMutex);
+}
+
+void reportCaptureStatus(const char* status, int error) {
+    portENTER_CRITICAL(&captureStatusMux);
+    captureStatus = status;
+    captureError = error;
+    portEXIT_CRITICAL(&captureStatusMux);
 }
 } // namespace cameraService

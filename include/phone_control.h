@@ -25,8 +25,13 @@ public:
     bool owned = false;
     bool maintenance = false;
     uint32_t token = 0;
+    const char* stopReason = "not connected";
 
-    void stop() {
+    uint32_t commandAge(uint32_t now) const { return now - lastCommandMs_; }
+
+    void stop(const char* reason = "stop requested") {
+        if (owned)
+            stopReason = reason;
         command.enabled = false;
         command.mode = Mode::IDLE;
         command.forward = command.turn = 0;
@@ -35,13 +40,13 @@ public:
     }
 
     void setMaintenance(bool enabled) {
-        stop();
+        stop("maintenance changed");
         maintenance = enabled;
     }
 
     void tick(uint32_t now) {
         if (owned && now - lastCommandMs_ > cfg::PHONE_TIMEOUT_MS)
-            stop();
+            stop("phone heartbeat timeout");
     }
 
     bool claim(uint32_t newToken, uint32_t now) {
@@ -51,6 +56,7 @@ public:
         stop();
         token = newToken;
         owned = true;
+        stopReason = "none";
         command.enabled = true;
         ++command.armId;
         lastCommandMs_ = now;

@@ -172,6 +172,8 @@ String buildStatusJson() {
     json += "\",\"target\":" + String(phone.command.targetId);
     json += ",\"owned\":";
     json += phone.owned ? "true" : "false";
+    json += ",\"stopReason\":\"" + String(phone.stopReason) + "\"";
+    json += ",\"commandAgeMs\":" + String(phone.commandAge(now));
     json += ",\"link\":";
     json += link ? "true" : "false";
     json += ",\"enabled\":";
@@ -288,7 +290,7 @@ void loop() {
         }
         updateMotorOutputs();
         if (navigator.state == robot::State::FAULT && phone.owned)
-            phone.stop();
+            phone.stop(navigator.reason);
     }
     sendPoll(now);
     mobile.tick(millis());

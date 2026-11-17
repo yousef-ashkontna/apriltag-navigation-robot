@@ -7,4 +7,5 @@ namespace cameraService {
 const robot::CameraCalibration& calibration();
 void begin();
 void publishFrame(const camera_fb_t* frame, uint32_t sequence, int64_t captureUs);
+void reportCaptureStatus(const char* status, int error = 0);
 } // namespace cameraService

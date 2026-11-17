@@ -26,6 +26,9 @@ public:
     void tick(uint32_t now) {
         for (auto& slot : slots_) {
             if (!slot.client) {
+                // A peer can disconnect halfway through a request or response.
+                // Never give its buffered bytes or send offset to a new client.
+                close(slot);
                 slot.client = server_.accept();
                 if (slot.client) {
                     slot.client.setNoDelay(true);
@@ -74,11 +77,16 @@ private:
     WiFiServer server_;
 
     static void close(Slot& connection) {
-        connection.client.abort();
+        // WiFiClient::abort() first flushes with the default (potentially long)
+        // timeout. Keep cleanup bounded so a failed HTTP client cannot stall
+        // motor control and the other HTTP connections.
+        connection.client.stop(1);
+        connection.client = WiFiClient();
         connection.request = "";
         connection.header = "";
         connection.body = "";
         connection.sent = 0;
+        connection.started = connection.progress = 0;
         connection.responding = connection.page = false;
     }
 
@@ -162,7 +170,14 @@ private:
             return;
         }
         if (path == "/api/stop") {
-            control_.stop();
+            const String cause = queryValue(url, "cause");
+            const char* reason = cause == "status" ? "browser status request failed"
+                                 : cause == "command" ? "browser command request failed"
+                                 : cause == "hidden" ? "browser page hidden"
+                                 : cause == "blur" ? "browser lost focus"
+                                 : cause == "pagehide" ? "browser page closed or navigated"
+                                 : "Stop button or stop request";
+            control_.stop(reason);
             respond(connection, 200, "{\"ok\":true}");
             return;
         }
@@ -231,7 +246,7 @@ private:
         } else if (action != "heartbeat")
             ok = false;
         if (!ok) {
-            control_.stop();
+            control_.stop("invalid control command");
             respond(connection, 400, "{\"error\":\"Invalid command\"}");
             return;
         }
@@ -244,13 +259,7 @@ private:
                          connection.page ? sizeof(MOBILE_PAGE) - 1 : connection.body.length();
         const size_t total = headerSize + bodySize;
         if (connection.sent >= total) {
-            // stop(0) uses the default timeout, so pass 1 to keep the wait short.
-            connection.client.stop(1);
-            connection.request = "";
-            connection.header = "";
-            connection.body = "";
-            connection.sent = 0;
-            connection.responding = connection.page = false;
+            close(connection);
             return;
         }
         int room = connection.client.availableForWrite();

@@ -447,7 +447,24 @@ void maintenanceTests() {
     assert(rollover.ready(299));
 }
 
+void stopReasonTests() {
+    PhoneControl phone;
+    assert(phone.claim(123, 100));
+    assert(std::string(phone.stopReason) == "none");
+    phone.tick(100 + cfg::PHONE_TIMEOUT_MS + 1);
+    assert(!phone.owned && !phone.command.enabled);
+    assert(std::string(phone.stopReason) == "phone heartbeat timeout");
+    phone.stop("late browser stop");
+    assert(std::string(phone.stopReason) == "phone heartbeat timeout");
+    assert(phone.claim(456, 2000));
+    assert(std::string(phone.stopReason) == "none");
+    phone.stop("browser status request failed");
+    assert(!phone.command.enabled);
+    assert(std::string(phone.stopReason) == "browser status request failed");
+}
+
 int main() {
+    stopReasonTests();
     appArmingTests();
     maintenanceTests();
     protocolTests();

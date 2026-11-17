@@ -171,15 +171,15 @@ function resetControls(text) {
     render();
 }
 
-function emergencyStop(text = 'Stopped. Connect controls to continue.') {
+function emergencyStop(text = 'Stopped. Connect controls to continue.', cause = 'stop') {
     clearHeld();
     token = 0;
     render();
     message(text);
     if (navigator.sendBeacon)
-        navigator.sendBeacon('/api/stop');
+        navigator.sendBeacon('/api/stop?cause=' + encodeURIComponent(cause));
     else
-        fetch('/api/stop', {method : 'POST', keepalive : true}).catch(() => {});
+        fetch('/api/stop?cause=' + encodeURIComponent(cause), {method : 'POST', keepalive : true}).catch(() => {});
 }
 
 async function json(url, options = {}) {
@@ -218,7 +218,7 @@ async function action(name, args = {}, force = false) {
         return token === owner;
     } catch (e) {
         if (token === owner && issuedSequence === sequence)
-            emergencyStop('Connection interrupted. Robot stopped; reconnect controls.');
+            emergencyStop('Connection interrupted. Robot stopped; reconnect controls.', 'command');
         return false;
     } finally {
         busy--;
@@ -239,7 +239,8 @@ function render() {
     if (!status)
         return;
     $('state').textContent = status.state.replaceAll('_', ' ');
-    $('reason').textContent = status.reason;
+    $('reason').textContent = status.state === 'DISARMED' && status.stopReason && status.stopReason !== 'none'
+        ? status.stopReason + '. Connect controls to continue.' : status.reason;
     $('target').textContent = status.mode === 'AUTO'     ? 'Tag ' + status.target
                               : status.mode === 'MANUAL' ? 'Manual'
                                                          : 'None';
@@ -271,11 +272,11 @@ async function poll() {
         status = await json('/api/state');
         statusAt = performance.now();
         if (token && !status.owned)
-            resetControls('Control session ended. Connect controls to continue.');
+            resetControls((status.stopReason || 'Control session ended') + '. Connect controls to continue.');
         render();
     } catch (e) {
         if (token)
-            emergencyStop('Connection lost. Robot stopped.');
+            emergencyStop('Connection lost. Robot stopped.', 'status');
         statusAt = 0;
         render();
     } finally {
@@ -381,15 +382,15 @@ document.addEventListener('visibilitychange', () => {
         cameraController.abort();
     hideCamera(cameraEnabled ? 'Waiting for a new picture…' : 'Camera view paused');
     if (document.hidden && token)
-        emergencyStop('Stopped while page was hidden.');
+        emergencyStop('Stopped while page was hidden.', 'hidden');
 });
 window.addEventListener('pagehide', () => {
     if (token)
-        emergencyStop();
+        emergencyStop('Stopped while leaving the page.', 'pagehide');
 });
 window.addEventListener('blur', () => {
     if (token)
-        emergencyStop('Stopped when controls lost focus.');
+        emergencyStop('Stopped when controls lost focus.', 'blur');
 });
 setInterval(() => {
     if (!token || document.hidden)

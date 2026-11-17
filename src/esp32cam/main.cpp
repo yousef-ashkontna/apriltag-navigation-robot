@@ -163,10 +163,12 @@ bool setupCamera() {
     cameraConfig.grab_mode = CAMERA_GRAB_LATEST;
     const esp_err_t error = esp_camera_init(&cameraConfig);
     if (error != ESP_OK) {
+        cameraService::reportCaptureStatus("camera initialization failed", error);
         return false;
     }
     sensor_t* sensor = esp_camera_sensor_get();
     if (!sensor || sensor->id.PID != OV2640_PID) {
+        cameraService::reportCaptureStatus("OV2640 sensor unavailable");
         return false;
     }
     sensor->set_hmirror(sensor, cfg::CAMERA_HMIRROR);
@@ -210,10 +212,13 @@ void setup() {
     cameraService::begin();
     cameraRuntime::setupOta();
     if (!psramFound() || ESP.getPsramSize() < 2 * 1024 * 1024) {
+        cameraService::reportCaptureStatus("PSRAM unavailable or too small");
         return;
     }
     if (!setupCamera())
         return;
+    initialized = true;
+    cameraService::reportCaptureStatus("waiting for first frame");
     family = tag36h11_create();
     detector = apriltag_detector_create();
     if (!family || !detector) {
@@ -226,7 +231,6 @@ void setup() {
     detector->refine_edges = true;
     detector->decode_sharpening = 0.25f;
     detector->debug = false;
-    initialized = true;
 }
 
 void loop() {
@@ -240,33 +244,31 @@ void loop() {
         return;
     }
     Vision result;
-    result.frame = ++frameCounter;
     portENTER_CRITICAL(&visionMux);
     result.targetId = requested.targetId;
     result.requestId = requested.requestId;
     portEXIT_CRITICAL(&visionMux);
-    camera_fb_t* frameBuffer = esp_camera_fb_get();
-    if (!frameBuffer) {
+    camera_fb_t* frame = esp_camera_fb_get();
+    if (!frame) {
+        cameraService::reportCaptureStatus("camera frame acquisition failed");
         publish(result);
         delay(100);
         return;
     }
-    result.captureUs =
-        int64_t(frameBuffer->timestamp.tv_sec) * 1000000LL + frameBuffer->timestamp.tv_usec;
-    if (frameBuffer->format != PIXFORMAT_GRAYSCALE || frameBuffer->width != cfg::IMAGE_WIDTH ||
-        frameBuffer->height != cfg::IMAGE_HEIGHT ||
-        frameBuffer->len < frameBuffer->width * frameBuffer->height) {
-        esp_camera_fb_return(frameBuffer);
+    if (frame->format != PIXFORMAT_GRAYSCALE || frame->width != cfg::IMAGE_WIDTH ||
+        frame->height != cfg::IMAGE_HEIGHT || frame->len < cfg::IMAGE_WIDTH * cfg::IMAGE_HEIGHT) {
+        cameraService::reportCaptureStatus("unexpected camera frame format or size");
+        esp_camera_fb_return(frame);
         publish(result);
         delay(100);
         return;
     }
-    cameraService::publishFrame(frameBuffer, result.frame, result.captureUs);
-    image_u8_t image = {int(frameBuffer->width),
-                        int(frameBuffer->height),
-                        int(frameBuffer->width),
-                        frameBuffer->buf};
-    zarray_t* detections = apriltag_detector_detect(detector, &image);
+    result.frame = ++frameCounter;
+    result.captureUs = int64_t(frame->timestamp.tv_sec) * 1000000LL + frame->timestamp.tv_usec;
+    cameraService::publishFrame(frame, result.frame, result.captureUs);
+    cameraService::reportCaptureStatus(family && detector ? "capturing" : "capturing without tag detection");
+    image_u8_t image = {cfg::IMAGE_WIDTH, cfg::IMAGE_HEIGHT, cfg::IMAGE_WIDTH, frame->buf};
+    zarray_t* detections = family && detector ? apriltag_detector_detect(detector, &image) : nullptr;
     if (detections) {
         result.ready = true;
         apriltag_detection_t* selected = nullptr;
@@ -311,7 +313,7 @@ void loop() {
         }
         apriltag_detections_destroy(detections);
     }
-    esp_camera_fb_return(frameBuffer);
+    esp_camera_fb_return(frame);
     publish(result);
     delay(10); // let idle/watchdog tasks run between detections
 }
